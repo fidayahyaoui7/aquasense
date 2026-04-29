@@ -17,9 +17,9 @@ interface BuildingTypeOption {
 const BUILDING_TYPES: BuildingTypeOption[] = [
   { id: 'maison', label: 'Maison', icon: <Home className="w-8 h-8" /> },
   { id: 'appartement', label: 'Appartement', icon: <Building2 className="w-8 h-8" /> },
-  { id: 'café', label: 'Café', icon: <Coffee className="w-8 h-8" /> },
+  { id: 'cafe', label: 'Café', icon: <Coffee className="w-8 h-8" /> },
   { id: 'restaurant', label: 'Restaurant', icon: <UtensilsCrossed className="w-8 h-8" /> },
-  { id: 'hôtel', label: 'Hôtel', icon: <Hotel className="w-8 h-8" /> },
+  { id: 'hotel', label: 'Hôtel', icon: <Hotel className="w-8 h-8" /> },
   { id: 'immeuble', label: 'Immeuble', icon: <Building className="w-8 h-8" /> },
   { id: 'usine', label: 'Usine', icon: <Factory className="w-8 h-8" /> },
 ];
@@ -116,7 +116,8 @@ export function OnboardingScreen() {
 
       // Save to localStorage
       const cfg = JSON.parse(localStorage.getItem('aquasense_config') || '{}');
-      cfg.buildingType = selectedType.charAt(0).toUpperCase() + selectedType.slice(1);
+      const displayLabel = BUILDING_TYPES.find(t => t.id === selectedType)?.label || selectedType;
+      cfg.buildingType = displayLabel;
       cfg.buildingName = buildingName.trim();
       cfg.address = address.trim();
       localStorage.setItem('aquasense_config', JSON.stringify(cfg));

@@ -1,10 +1,16 @@
 """
-Lecture compteur : YOLOv8-seg (zone chiffres) + EasyOCR, d'après water-meter-pcd (1).ipynb.
+Pipeline YOLOv8 deux étages pour lecture compteur d'eau (water-meter-digit-recognition-final.ipynb).
 
-- Masque YOLO → bbox poly → crop
-- Essai rotations 0 / 90 / 180 / 270 puis, si h > w, rotation 90° horaire (comme le notebook)
-- EasyOCR : allowlist 0-9, conf > 0.4, tri gauche → droite, max 8 digits
-- Si ``ai_models/best.pt`` absent ou erreur → relevé simulé (backend démarre quand même)
+Étape 1 : YOLOv8-seg — détecte la zone des chiffres dans l'image complète du compteur
+Étape 2 : YOLOv8-det — reconnaît chaque chiffre individuel (0-9) dans la zone cropped
+
+Features :
+- Rotation automatique portrait → landscape
+- Essai tous les 4 orientations + mirroring pour correction image inversée
+- Tri gauche→droite avec suppression chevauchements (x_iou > 0.3)
+- Heuristique : les compteurs ont toujours des zéros au début, jamais à la fin
+  → pénalise les images mirrored/upside-down
+- Si modèles absents → relevé simulé (backend démarre quand même)
 """
 
 from __future__ import annotations
@@ -21,7 +27,6 @@ from settings import settings
 def _import_cv2():
     try:
         import cv2
-
         return cv2
     except ImportError:
         return None
@@ -29,93 +34,187 @@ def _import_cv2():
 
 class YoloMeterOCR:
     def __init__(self) -> None:
-        self._model: Any = None
-        self._reader: Any = None
-        self._weights = settings.AI_MODELS_DIR / "best.pt"
+        self._seg_model: Any = None
+        self._det_model: Any = None
+        self._seg_weights = settings.AI_MODELS_DIR / "best_model.pkl"  # Stage-1 segmentation
+        self._det_weights = settings.AI_MODELS_DIR / "best.pt"          # Stage-2 detection
 
-    def _lazy_model(self) -> Any:
-        if self._model is None and self._weights.is_file():
+    def _lazy_seg_model(self) -> Any:
+        """Lazy load YOLOv8n-seg (digit window segmentation)."""
+        if self._seg_model is None and self._seg_weights.is_file():
             try:
                 from ultralytics import YOLO
-
-                self._model = YOLO(str(self._weights))
+                self._seg_model = YOLO(str(self._seg_weights))
             except Exception:
-                self._model = False
-        return self._model if self._model not in (None, False) else None
+                self._seg_model = False
+        return self._seg_model if self._seg_model not in (None, False) else None
 
-    def _lazy_reader(self) -> Any:
-        if self._reader is None:
+    def _lazy_det_model(self) -> Any:
+        """Lazy load YOLOv8n-det (digit recognition)."""
+        if self._det_model is None and self._det_weights.is_file():
             try:
-                import easyocr
-
-                self._reader = easyocr.Reader(["en"], gpu=False, verbose=False)
+                from ultralytics import YOLO
+                self._det_model = YOLO(str(self._det_weights))
             except Exception:
-                self._reader = False
-        return self._reader if self._reader not in (None, False) else None
+                self._det_model = False
+        return self._det_model if self._det_model not in (None, False) else None
 
-    def _crop_from_segmentation(self, image_bgr: np.ndarray) -> np.ndarray | None:
-        model = self._lazy_model()
-        if model is None:
-            return None
-        try:
-            results = model(image_bgr, verbose=False)
-            r0 = results[0]
-            if r0.masks is None:
-                return None
-            poly = r0.masks.xy[0].astype(np.int32)
-            x1, y1 = poly[:, 0].min(), poly[:, 1].min()
-            x2, y2 = poly[:, 0].max(), poly[:, 1].max()
-            if x2 <= x1 or y2 <= y1:
-                return None
-            return image_bgr[y1:y2, x1:x2].copy()
-        except Exception:
+    def _crop_digit_window(self, image: np.ndarray, result: Any) -> np.ndarray | None:
+        """Extract & auto-rotate the digit window from a Stage-1 result."""
+        cv2 = _import_cv2()
+        if cv2 is None or result.masks is None or len(result.masks.xy) == 0:
             return None
 
-    def _read_digits_easyocr(self, crop_bgr: np.ndarray) -> tuple[str, float]:
-        cv2 = _import_cv2()
-        if cv2 is None:
-            return "", 0.0
-        reader = self._lazy_reader()
-        if reader is None:
-            return "", 0.0
-        gray = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2GRAY)
-        gray = cv2.GaussianBlur(gray, (5, 5), 0)
-        results = reader.readtext(gray, allowlist="0123456789", detail=1)
-        digits: list[tuple[float, str, float]] = []
-        for box, text, conf in results:
-            if text.isdigit() and conf > 0.4:
-                x_left = float(box[0][0])
-                digits.append((x_left, text, float(conf)))
-        digits.sort(key=lambda x: x[0])
-        reading = "".join(d[1] for d in digits)[:8]
-        confs = [d[2] for d in digits]
-        avg_conf = float(sum(confs) / len(confs)) if confs else 0.0
-        return reading, avg_conf
+        poly = result.masks.xy[0].astype(int)
+        if len(poly) == 0:
+            return None
 
-    def _rotate_90k(self, img: np.ndarray, k: int) -> np.ndarray:
-        cv2 = _import_cv2()
-        if cv2 is None:
-            return img
-        out = img
-        for _ in range(k % 4):
-            out = cv2.rotate(out, cv2.ROTATE_90_COUNTERCLOCKWISE)
-        return out
+        h, w = image.shape[:2]
+        x1 = int(np.clip(poly[:, 0].min(), 0, w - 1))
+        y1 = int(np.clip(poly[:, 1].min(), 0, h - 1))
+        x2 = int(np.clip(poly[:, 0].max(), 0, w))
+        y2 = int(np.clip(poly[:, 1].max(), 0, h))
 
-    def _best_rotation_reading(self, crop_bgr: np.ndarray) -> tuple[str, float]:
+        if x2 <= x1 or y2 <= y1:
+            return None
+
+        crop = image[y1:y2, x1:x2]
+
+        # auto-rotate portrait crops to landscape
+        if crop.shape[0] > crop.shape[1]:
+            crop = cv2.rotate(crop, cv2.ROTATE_90_CLOCKWISE)
+
+        return crop
+
+    def _read_meter_digits(self, img: np.ndarray, mdl: Any, conf: float = 0.08, max_digits: int = 8) -> str:
+        """Run Stage-2 detection on a digit-window image. Returns left-to-right digit string."""
         cv2 = _import_cv2()
-        if cv2 is None:
-            return "", 0.0
-        best_s, best_score = "", -1.0
-        for k in range(4):
-            rot = self._rotate_90k(crop_bgr, k)
-            h, w = rot.shape[:2]
-            if h > w:
-                rot = cv2.rotate(rot, cv2.ROTATE_90_CLOCKWISE)
-            s, c = self._read_digits_easyocr(rot)
-            score = len(s) * 10.0 + c
+        if cv2 is None or mdl is None:
+            return ""
+
+        h, w = img.shape[:2]
+        if h > w:
+            img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+            w, h = h, w
+
+        results = mdl.predict(img, conf=conf, iou=0.3, verbose=False)
+        boxes = results[0].boxes
+        if boxes is None or len(boxes) == 0:
+            return ""
+
+        digits = []
+        for b in boxes:
+            x1, x2 = float(b.xyxy[0][0]), float(b.xyxy[0][2])
+            cx = (x1 + x2) / 2
+            digits.append((cx, x1, x2, int(b.cls[0]), float(b.conf[0])))
+
+        digits.sort(key=lambda d: d[0])
+
+        # Supprime chevauchements (x_iou > 0.3), garde conf la plus élevée
+        def x_iou(a: tuple, b: tuple) -> float:
+            inter = max(0, min(a[2], b[2]) - max(a[1], b[1]))
+            union = max(a[2], b[2]) - min(a[1], b[1])
+            return inter / union if union > 0 else 0
+
+        filtered = []
+        for d in digits:
+            if not filtered:
+                filtered.append(d)
+            elif x_iou(filtered[-1], d) > 0.3:
+                if d[4] > filtered[-1][4]:
+                    filtered[-1] = d
+            else:
+                filtered.append(d)
+
+        if len(filtered) > max_digits:
+            filtered = sorted(filtered, key=lambda d: -d[4])[:max_digits]
+            filtered.sort(key=lambda d: d[0])
+
+        return "".join(str(d[3]) for d in filtered)
+
+    def _read_meter_digits_allrot(self, img: np.ndarray, mdl: Any, conf: float = 0.25, max_digits: int = 8) -> str:
+        """Try all 4 orientations + mirroring. Pick the one with best meter-reading score.
+        
+        Heuristique : compteurs d'eau ont toujours des zéros au début (jamais à la fin).
+        Une image mirrored/upside-down produirait des zéros à la fin → pénalisée.
+        """
+        cv2 = _import_cv2()
+        if cv2 is None or mdl is None:
+            return ""
+
+        h, w = img.shape[:2]
+        if h > w:
+            img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+
+        variants = [
+            img,
+            cv2.flip(img, 1),                               # mirror horizontal
+            cv2.rotate(img, cv2.ROTATE_180),                # upside down
+            cv2.flip(cv2.rotate(img, cv2.ROTATE_180), 1),   # mirror + 180
+        ]
+
+        def predict_variant(v: np.ndarray) -> tuple[str, float, int]:
+            results = mdl.predict(v, conf=conf, iou=0.3, verbose=False)
+            boxes = results[0].boxes
+            if boxes is None or len(boxes) == 0:
+                return "", 0.0, 0
+
+            digits = []
+            for b in boxes:
+                x1, x2 = float(b.xyxy[0][0]), float(b.xyxy[0][2])
+                cx = (x1 + x2) / 2
+                digits.append((cx, x1, x2, int(b.cls[0]), float(b.conf[0])))
+
+            digits.sort(key=lambda d: d[0])
+
+            def x_iou(a: tuple, b: tuple) -> float:
+                inter = max(0, min(a[2], b[2]) - max(a[1], b[1]))
+                union = max(a[2], b[2]) - min(a[1], b[1])
+                return inter / union if union > 0 else 0
+
+            filtered = []
+            for d in digits:
+                if not filtered:
+                    filtered.append(d)
+                elif x_iou(filtered[-1], d) > 0.3:
+                    if d[4] > filtered[-1][4]:
+                        filtered[-1] = d
+                else:
+                    filtered.append(d)
+
+            if len(filtered) > max_digits:
+                filtered = sorted(filtered, key=lambda d: -d[4])[:max_digits]
+                filtered.sort(key=lambda d: d[0])
+
+            pred = "".join(str(d[3]) for d in filtered)
+            avg_conf = sum(d[4] for d in filtered) / len(filtered) if filtered else 0.0
+            return pred, avg_conf, len(filtered)
+
+        def orientation_score(pred: str, avg_conf: float, count: int) -> float:
+            """Score how meter-like a reading is.
+            Real meter readings have leading zeros, never trailing zeros."""
+            if not pred:
+                return -1.0
+            score = avg_conf
+            leading_zeros = len(pred) - len(pred.lstrip("0"))
+            trailing_zeros = len(pred) - len(pred.rstrip("0"))
+            score += leading_zeros * 0.15    # bonus – meters start with zeros
+            score -= trailing_zeros * 0.20   # penalty – trailing zeros = flipped
+            if count == max_digits:
+                score += 0.2                 # bonus for correct digit count
+            return score
+
+        best_pred, best_score = "", -999.0
+        for v in variants:
+            pred, avg_conf, count = predict_variant(v)
+            if not pred:
+                continue
+            score = orientation_score(pred, avg_conf, count)
             if score > best_score:
-                best_s, best_score = s, score
-        return best_s, max(0.0, best_score - len(best_s) * 10.0)
+                best_score = score
+                best_pred = pred
+
+        return best_pred
 
     def _simulated(self, reason: str) -> dict[str, Any]:
         n = random.randint(4, 7)
@@ -130,39 +229,57 @@ class YoloMeterOCR:
         }
 
     def _consumption_from_digits(self, raw: str) -> float:
+        """Convert digit string to consumption in m³."""
         digits_only = re.sub(r"\D", "", raw) or "0"
         v = float(int(digits_only[:8] or 0)) / 10000.0
         return round(min(max(v, 0.0001), 50.0), 4)
 
     def read_meter(self, image_bytes: bytes) -> dict[str, Any]:
+        """Pipeline complet : Stage-1 crop → Stage-2 recognition."""
         try:
-            if not self._weights.is_file():
-                return self._simulated("best.pt absent dans ai_models/")
-
             cv2 = _import_cv2()
             if cv2 is None:
-                return self._simulated(
-                    "opencv manquant — exécutez: py -3.14 -m pip install opencv-python-headless"
-                )
+                return self._simulated("opencv manquant — exécutez: pip install opencv-python-headless")
 
             arr = np.frombuffer(image_bytes, dtype=np.uint8)
             img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
             if img is None:
                 return self._simulated("image illisible")
 
-            crop = self._crop_from_segmentation(img)
-            if crop is None or crop.size == 0:
-                return self._simulated("aucune zone chiffres détectée")
+            # --- Stage 1: Segment digit window ---
+            seg_model = self._lazy_seg_model()
+            if seg_model is None:
+                # Fallback: try Stage-2 on full image if Stage-1 unavailable
+                det_model = self._lazy_det_model()
+                if det_model is None:
+                    return self._simulated("modèles YOLO absents dans ai_models/")
+                raw = self._read_meter_digits_allrot(img, det_model, conf=0.25)
+            else:
+                seg_results = seg_model.predict(img, conf=0.25, verbose=False)
+                crop = self._crop_digit_window(img, seg_results[0])
 
-            raw, conf = self._best_rotation_reading(crop)
+                if crop is None or crop.size == 0:
+                    # Fallback: try full image if Stage-1 doesn't detect window
+                    det_model = self._lazy_det_model()
+                    if det_model is None:
+                        return self._simulated("aucune zone chiffres détectée")
+                    crop = img
+
+                # --- Stage 2: Read digits from crop ---
+                det_model = self._lazy_det_model()
+                if det_model is None:
+                    return self._simulated("modèle Stage-2 absent dans ai_models/")
+
+                raw = self._read_meter_digits_allrot(crop, det_model, conf=0.25)
+
             if not raw:
-                return self._simulated("OCR vide après rotations")
+                return self._simulated("aucun chiffre détecté après traitement")
 
             return {
                 "raw_reading": raw[:8],
                 "consumption_m3": self._consumption_from_digits(raw),
-                "confidence": round(float(conf or 0.5), 4),
-                "backend": "yolo_seg_easyocr",
+                "confidence": 0.75,  # Confiance fixe pour pipeline YOLO complet
+                "backend": "yolov8_two_stage",
             }
         except Exception as e:
             return self._simulated(f"erreur pipeline: {e!s}")

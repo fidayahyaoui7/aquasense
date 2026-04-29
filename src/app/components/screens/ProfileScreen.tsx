@@ -24,11 +24,21 @@ const ALLOWED_BUILDING = new Set([
 const DEFAULT_THRESHOLDS: Record<string, { normal: string; alert: string }> = {
   'maison': { normal: '0.70', alert: '1.20' },
   'appartement': { normal: '0.50', alert: '0.90' },
-  'café': { normal: '2.00', alert: '3.50' },
+  'cafe': { normal: '2.00', alert: '3.50' },
   'restaurant': { normal: '4.00', alert: '7.00' },
-  'hôtel': { normal: '8.00', alert: '14.00' },
+  'hotel': { normal: '8.00', alert: '14.00' },
   'immeuble': { normal: '5.00', alert: '9.00' },
   'usine': { normal: '15.00', alert: '28.00' },
+};
+
+const BUILDING_DISPLAY_NAMES: Record<string, string> = {
+  'maison': 'Maison',
+  'appartement': 'Appartement',
+  'cafe': 'Café',
+  'restaurant': 'Restaurant',
+  'hotel': 'Hôtel',
+  'immeuble': 'Immeuble',
+  'usine': 'Usine',
 };
 
 function userToProfileState(u: auth.AuthUser, config: Record<string, string>) {
@@ -42,8 +52,7 @@ function userToProfileState(u: auth.AuthUser, config: Record<string, string>) {
     phone: u.telephone || '',
     adresse: u.adresse || '',
     buildingName: config.buildingName || 'Mon Bâtiment',
-    buildingType:
-      u.building_type.charAt(0).toUpperCase() + u.building_type.slice(1),
+    buildingType: buildingTypeKey,
     normalThreshold: config.normalThreshold || defaults.normal,
     alertThreshold: config.alertThreshold || defaults.alert,
   };
@@ -112,19 +121,7 @@ export function ProfileScreen() {
     setError(null);
     try {
       const { prenom, nom } = splitFullName(profile.fullName);
-      // Normalize the building type (remove accents for comparison)
-      let bt = normalizeBuildingType(profile.buildingType.trim());
-      // Map normalized values to allowed values
-      const buildingTypeMap: Record<string, string> = {
-        'maison': 'maison',
-        'appartement': 'appartement',
-        'cafe': 'café',
-        'restaurant': 'restaurant',
-        'hotel': 'hôtel',
-        'immeuble': 'immeuble',
-        'usine': 'usine',
-      };
-      bt = buildingTypeMap[bt] || 'maison';
+      const normalizedBuildingType = normalizeBuildingType(profile.buildingType.trim());
 
       const { user } = await usersApi.updateProfile(stored.id, {
         prenom: prenom || stored.prenom,
@@ -132,15 +129,14 @@ export function ProfileScreen() {
         email: profile.email.trim(),
         telephone: profile.phone.trim(),
         adresse: profile.adresse.trim(),
-        building_type: bt,
+        building_type: normalizedBuildingType,
       });
 
       localStorage.setItem(USER_KEY, JSON.stringify(user));
 
       const updatedConfig = {
         buildingName: profile.buildingName,
-        buildingType:
-          user.building_type.charAt(0).toUpperCase() + user.building_type.slice(1),
+        buildingType: user.building_type,
         normalThreshold: profile.normalThreshold,
         alertThreshold: profile.alertThreshold,
       };
@@ -280,9 +276,9 @@ export function ProfileScreen() {
                 <SelectContent className="bg-[#1A2B3C] border-[#2A3B4C]">
                   <SelectItem value="maison" className="text-white focus:bg-[#00B4D8]/20 focus:text-white">Maison</SelectItem>
                   <SelectItem value="appartement" className="text-white focus:bg-[#00B4D8]/20 focus:text-white">Appartement</SelectItem>
-                  <SelectItem value="café" className="text-white focus:bg-[#00B4D8]/20 focus:text-white">Café</SelectItem>
+                  <SelectItem value="cafe" className="text-white focus:bg-[#00B4D8]/20 focus:text-white">Café</SelectItem>
                   <SelectItem value="restaurant" className="text-white focus:bg-[#00B4D8]/20 focus:text-white">Restaurant</SelectItem>
-                  <SelectItem value="hôtel" className="text-white focus:bg-[#00B4D8]/20 focus:text-white">Hôtel</SelectItem>
+                  <SelectItem value="hotel" className="text-white focus:bg-[#00B4D8]/20 focus:text-white">Hôtel</SelectItem>
                   <SelectItem value="immeuble" className="text-white focus:bg-[#00B4D8]/20 focus:text-white">Immeuble</SelectItem>
                   <SelectItem value="usine" className="text-white focus:bg-[#00B4D8]/20 focus:text-white">Usine</SelectItem>
                 </SelectContent>

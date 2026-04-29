@@ -20,46 +20,73 @@ import pandas as pd
 
 from settings import settings
 
-# ── Paramètres notebook (seuils tunisiens) ─────────────────────────────────
+# ── Paramètres notebook (seuils tunisiens SONEDE 2023) ─────────────────────────────────
+# Unités : m³/h (relevé compteur toutes les heures)
+#
+# Consommation domestique de référence (SONEDE 2023) :
+#   Ménage tunisien moyen : ~113 L/j → ~0.0047 m³/h en continu
+#   Pic diurne (cuisine + douche + WC) ≈ 0.013 m³/h
+#
+# Fuites nocturnes (INRGREF Tunisie) :
+#   Petite fuite robinet : ~50–200 L/nuit → 0.002–0.008 m³/h
+#   Fuite canalisation : 200–500 L/nuit → 0.008–0.021 m³/h
+#
+# Stress hydrique estival (SONEDE 2023) :
+#   Consommation estivale ×2 vs hiver
+
 BUILDING_TYPES = ["maison", "appartement", "cafe", "restaurant", "hotel", "immeuble", "usine"]
+BUILDING_TYPES_DISPLAY = {"cafe": "Café", "hotel": "Hôtel"}  # For UI display with accents
 SEASONS = ["hiver", "printemps", "ete", "automne"]
 
+# Consommation normale de référence (m³/h) par type de local
+# Basé sur : SONEDE 2023, norme EN 806-3, ONAS Tunisie
 THRESHOLDS: dict[str, float] = {
-    "maison": 0.70,
-    "appartement": 0.50,
-    "cafe": 2.00,
-    "restaurant": 4.00,
-    "hotel": 8.00,
-    "immeuble": 5.00,
-    "usine": 15.00,
+    "maison": 0.013,       # ménage tunisien moyen (pic diurne ~0.013 m³/h)
+    "appartement": 0.009,  # surface plus petite, ~70% maison individuelle
+    "cafe": 0.045,         # café tunisien : 50–80 couverts, forte rotation
+    "restaurant": 0.090,   # restaurant : cuisine + salle, pic déjeuner/dîner
+    "hotel": 0.250,        # hôtel 3★, 50 chambres, piscine incluse
+    "immeuble": 0.120,     # immeuble 10 appartements (×0.009 × facteur foisonnement)
+    "usine": 0.400,        # PME industrielle tunisienne, process + sanitaires
 }
 
+# Seuil d'alerte = 40 m³/trimestre SONEDE (tranche 2)
+# → 40 m³ / 2184 h ≈ 0.018 m³/h ; ratio alerte par type × 1.3–1.5
 ALERT_THRESHOLDS: dict[str, float] = {
-    "maison": 1.20,
-    "appartement": 0.90,
-    "cafe": 3.50,
-    "restaurant": 7.00,
-    "hotel": 14.00,
-    "immeuble": 9.00,
-    "usine": 28.00,
+    "maison": 0.018,       # 40 m³/trimestre SONEDE tranche 2
+    "appartement": 0.013,  # seuil ajusté surface
+    "cafe": 0.065,         # ×1.45 du seuil normal
+    "restaurant": 0.130,   # ×1.45
+    "hotel": 0.375,        # ×1.50
+    "immeuble": 0.175,     # ×1.46
+    "usine": 0.600,        # ×1.50
 }
 
+# Coefficients saisonniers — stress hydrique tunisien (SONEDE 2023)
+# Été ×2.0 : climatisation, arrosage, forte demande touristique
+# Hiver ×0.6 : faible demande, précipitations
 SEASON_COEF: dict[str, float] = {
-    "hiver": 0.75,
-    "printemps": 1.00,
-    "ete": 1.50,
-    "automne": 0.90,
+    "hiver": 0.60,        # faible demande (déc–fév)
+    "printemps": 1.00,    # référence
+    "ete": 2.00,          # stress hydrique maximal (juin–août)
+    "automne": 0.85,      # retour progressif à la normale
 }
 
+# Ratio de consommation nocturne (22h–06h) — fraction du seuil normal
+# Hôtel actif 24h/24 ; résidentiel quasi nul la nuit
 NIGHT_RATIO: dict[str, float] = {
-    "maison": 0.02,
-    "appartement": 0.02,
-    "cafe": 0.00,
-    "restaurant": 0.00,
-    "hotel": 0.08,
-    "immeuble": 0.03,
-    "usine": 0.01,
+    "maison": 0.015,       # ~0.2 L/h résiduel (WC nocturne)
+    "appartement": 0.012,
+    "cafe": 0.000,         # fermé la nuit
+    "restaurant": 0.000,   # fermé la nuit
+    "hotel": 0.120,        # service 24h/24 (réception, nuitards)
+    "immeuble": 0.018,     # parties communes + quelques appartements
+    "usine": 0.005,        # veille machine, nettoyage
 }
+
+# Paramètres de fuite nocturne (m³/h) — INRGREF Tunisie
+LEAK_MIN: float = 0.002  # ~2 L/h (robinet qui goutte, joint usé)
+LEAK_MAX: float = 0.012  # ~12 L/h (fissure canalisation, chasse WC défaillante)
 
 ANOMALY_NAMES: dict[int, str] = {
     0: "normal",
@@ -76,9 +103,9 @@ FEATURE_ORDER = [
     "hour",
     "day_of_week",
     "is_night",
-    "threshold_m3",
-    "alert_threshold_m3",
-    "consumption_m3",
+    "threshold_m3h",
+    "alert_threshold_m3h",
+    "consumption_m3h",
     "consumption_ratio",
     "rolling_avg_7d",
     "delta_vs_prev",
@@ -202,8 +229,8 @@ class AnomalyDetector:
 
         consumption_ratio = conso / thr if thr > 0 else 0.0
         over_alert = 1 if conso > alert else 0
-        near_zero = 1 if conso < thr * 0.01 else 0
-        night_spike = 1 if (is_night == 1 and conso > thr * 0.04) else 0
+        near_zero = 1 if conso < thr * 0.005 else 0  # < 0.5% du seuil
+        night_spike = 1 if (is_night == 1 and conso > LEAK_MAX * 1.5) else 0
         delta_vs_prev = conso - prev
         ratio_vs_history = conso / hist_avg if hist_avg > 0 else 0.0
 
@@ -213,9 +240,9 @@ class AnomalyDetector:
             "hour": hour,
             "day_of_week": dow,
             "is_night": is_night,
-            "threshold_m3": thr,
-            "alert_threshold_m3": alert,
-            "consumption_m3": conso,
+            "threshold_m3h": thr,
+            "alert_threshold_m3h": alert,
+            "consumption_m3h": conso,
             "consumption_ratio": round(consumption_ratio, 6),
             "rolling_avg_7d": round(hist_avg, 6),
             "delta_vs_prev": round(delta_vs_prev, 6),
@@ -252,6 +279,7 @@ class AnomalyDetector:
         return pred, probs, str(name).lower().replace(" ", "_")
 
     def _heuristic(self, ctx: AnomalyContext, row: pd.DataFrame) -> tuple[int, dict[int, float], str]:
+        """Heuristique calibrée SONEDE 2023 (fallback si modèle ML absent)."""
         bt = (ctx.building_type or "maison").lower()
         if bt not in THRESHOLDS:
             bt = "maison"
@@ -264,20 +292,31 @@ class AnomalyDetector:
 
         scores = {i: 0.05 for i in ANOMALY_NAMES}
 
-        if conso < thr * 0.01:
+        # Anomalie 4 : consommation nulle
+        if conso < thr * 0.005:
             scores[4] += 0.9
-        if is_night and conso > thr * 0.04:
+
+        # Anomalie 2 : fuite nocturne (flux persistent > 1.5× fuite max INRGREF)
+        if is_night and conso > LEAK_MAX * 1.5:
             scores[2] += 0.55
+
+        # Anomalie 5 : pic inhabituel (rupture canalisation, usage illicite)
         if conso > alert * 2.0:
             scores[5] += 0.45
+        # Anomalie 1 : surconsommation (dépasse seuil SONEDE tranche 2)
         elif conso > alert:
             scores[1] += 0.45
 
+        # Anomalie 3 : anomalie saisonnière (comportement décalé temporellement)
         expected = thr * coef * (NIGHT_RATIO[bt] if is_night else 1.0) * 0.8
-        if expected > 0 and conso > expected * 2.2 and season_from_month(ctx.timestamp.month) in ("hiver", "automne"):
+        if (expected > 0 and conso > expected * 2.2 and 
+            season_from_month(ctx.timestamp.month) in ("hiver", "automne")):
             scores[3] += 0.25
 
+        # Bonus : probabilité "normal"
         scores[0] += 0.35
+
+        # Softmax : normalise les scores en probabilités
         z = np.array([max(scores[i], 1e-6) for i in range(6)], dtype=float)
         z = np.exp(z - z.max())
         z = z / z.sum()

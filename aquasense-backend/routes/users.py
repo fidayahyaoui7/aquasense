@@ -69,13 +69,7 @@ def update_user(user_id: int, body: UserUpdateBody, db: Session = Depends(get_db
     if body.building_type is not None:
         # Normalize: remove accents and convert to lowercase
         bt_normalized = body.building_type.lower().strip().encode('ascii', 'ignore').decode('utf-8')
-        # Map normalized values back to original values with accents
-        building_type_map = {
-            'cafe': 'café',
-            'hotel': 'hôtel',
-        }
-        bt = building_type_map.get(bt_normalized, bt_normalized)
-        u.building_type = bt if bt in BUILDING_TYPES else u.building_type
+        u.building_type = bt_normalized if bt_normalized in BUILDING_TYPES else u.building_type
     # Set is_configured to True when both building_type and adresse are provided
     if body.building_type is not None and body.adresse is not None:
         if body.building_type.strip() and body.adresse.strip():

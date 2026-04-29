@@ -127,13 +127,13 @@ AquaSense Mobile App Prototype/
 
 | Type de bâtiment | Normal | Alerte |
 |------------------|--------|--------|
-| Maison | 0.70 | 1.20 |
-| Appartement | 0.50 | 0.90 |
-| Café | 2.00 | 3.50 |
-| Restaurant | 4.00 | 7.00 |
-| Hôtel | 8.00 | 14.00 |
-| Immeuble | 5.00 | 9.00 |
-| Usine | 15.00 | 28.00 |
+| Maison | 0.013| 0.018 |
+| Appartement | 0.009 | 0.0.013 |
+| Cafe| 0.045 | 0.065|
+| Restaurant | 0.090 | 0.130 |
+| Hotel | 0.250 | 0.375|
+| Immeuble | 0.120 | 0.175|
+| Usine | 0.4 | 0.6 |
 
 ## 🔧 Commandes Utiles
 
