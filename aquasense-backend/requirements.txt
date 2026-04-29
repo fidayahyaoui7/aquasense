@@ -1,0 +1,22 @@
+# AquaSense backend — FastAPI + SQLite + IA
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+sqlalchemy==2.0.36
+python-jose[cryptography]==3.3.0
+bcrypt==4.2.1
+email-validator==2.2.0
+pydantic==2.10.3
+
+numpy>=2.0.0,<3
+pandas>=2.2.0
+pillow>=10.4.0
+opencv-python-headless>=4.8.0
+joblib>=1.4.0
+
+# Modèles (optionnels au runtime si .pt / .pkl absents)
+ultralytics>=8.3.0
+easyocr>=1.7.0
+torch>=2.4.0
+xgboost>=2.1.0
+scikit-learn>=1.5.0

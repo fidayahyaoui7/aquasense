@@ -1,0 +1,21 @@
+@import './fonts.css';
+@import './tailwind.css';
+@import './theme.css';
+
+/* Smooth transitions and animations */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@keyframes slide-in-from-bottom {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation: slide-in-from-bottom 0.3s ease-out;
+}
