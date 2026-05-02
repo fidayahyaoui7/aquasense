@@ -5,3 +5,37 @@ uploads/
 node_modules/
 dist/
 .env
+
+# Database & data
+aquasense-backend/data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python cache
+*.pyo
+*.pyd
+.Python
+
+# AI models (large files)
+ai_models/**/*.pt
+ai_models/**/*.pkl
+ai_models/**/*.onnx
+ai_models/**/*.h5
+
+# ESP32 build
+esp32_device/build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

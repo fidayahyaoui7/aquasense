@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import unicodedata
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
@@ -16,7 +18,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 class UserUpdateBody(BaseModel):
     prenom: str | None = None
     nom: str | None = None
-    email: EmailStr | None = None
+    email: str | None = None
     telephone: str | None = None
     adresse: str | None = None
     building_type: str | None = None
@@ -25,6 +27,11 @@ class UserUpdateBody(BaseModel):
 class PasswordUpdateBody(BaseModel):
     old_password: str = Field(..., min_length=1)
     new_password: str = Field(..., min_length=6, max_length=128)
+
+
+def _normalize_building_type(value: str) -> str:
+    normalized = unicodedata.normalize('NFKD', value or '')
+    return normalized.encode('ascii', 'ignore').decode('utf-8').strip().lower()
 
 
 def _public(u: User) -> dict:
@@ -67,9 +74,12 @@ def update_user(user_id: int, body: UserUpdateBody, db: Session = Depends(get_db
     if body.adresse is not None:
         u.adresse = body.adresse.strip()
     if body.building_type is not None:
-        # Normalize: remove accents and convert to lowercase
-        bt_normalized = body.building_type.lower().strip().encode('ascii', 'ignore').decode('utf-8')
-        u.building_type = bt_normalized if bt_normalized in BUILDING_TYPES else u.building_type
+        bt_normalized = _normalize_building_type(body.building_type)
+        if bt_normalized in BUILDING_TYPES:
+            u.building_type = bt_normalized
+            # Sync building_type to all user's devices
+            for device in u.devices:
+                device.building_type = bt_normalized
     # Set is_configured to True when both building_type and adresse are provided
     if body.building_type is not None and body.adresse is not None:
         if body.building_type.strip() and body.adresse.strip():

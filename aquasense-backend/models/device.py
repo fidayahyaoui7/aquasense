@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -18,13 +18,8 @@ class Device(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     # Lien vers le propriétaire (table users)
 
-    building_type: Mapped[str] = mapped_column(String(64), default="maison")
-    # Type de bâtiment : "maison", "appartement", "cafe", "restaurant", "hotel", "immeuble", "usine"
-    # Valeurs SONEDE 2023 alignées avec models.anomaly.BUILDING_TYPES
-
-    capture_interval: Mapped[int] = mapped_column(Integer, default=900)
-    # Intervalle de capture en secondes (défaut : 15 min = 900 s)
-    # Relevé compteur toutes les heures pour calibration SONEDE
+    name: Mapped[str] = mapped_column(String(128), default="ESP32-CAM")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, onupdate=datetime.utcnow)

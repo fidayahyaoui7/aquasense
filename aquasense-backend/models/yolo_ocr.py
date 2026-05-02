@@ -36,8 +36,8 @@ class YoloMeterOCR:
     def __init__(self) -> None:
         self._seg_model: Any = None
         self._det_model: Any = None
-        self._seg_weights = settings.AI_MODELS_DIR / "best_model.pkl"  # Stage-1 segmentation
-        self._det_weights = settings.AI_MODELS_DIR / "best.pt"          # Stage-2 detection
+        self._seg_weights = settings.AI_MODELS_DIR / "water_meter_models" / "seg_train" / "weights" / "best.pt"  # Stage-1 segmentation
+        self._det_weights = settings.AI_MODELS_DIR / "water_meter_models" / "det_train" / "weights" / "best.pt"  # Stage-2 detection
 
     def _lazy_seg_model(self) -> Any:
         """Lazy load YOLOv8n-seg (digit window segmentation)."""

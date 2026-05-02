@@ -31,6 +31,11 @@ export type ReadingStats = {
   comparison_last_month_percent: number;
 };
 
+export type LatestImage = {
+  image_url: string | null;
+  timestamp: string | null;
+};
+
 export async function getCurrent(user_id: number): Promise<CurrentReading> {
   const { data } = await api.get<CurrentReading>('/readings/current', {
     params: { user_id },
@@ -59,5 +64,17 @@ export async function getStats(user_id: number): Promise<ReadingStats> {
   const { data } = await api.get<ReadingStats>('/readings/stats', {
     params: { user_id },
   });
+  return data;
+}
+
+export async function getLatestImage(user_id: number): Promise<LatestImage> {
+  const { data } = await api.get<LatestImage>('/readings/latest-image', {
+    params: { user_id },
+  });
+  return data;
+}
+
+export async function getLatestImageByDevice(device_id: string): Promise<LatestImage> {
+  const { data } = await api.get<LatestImage>(`/readings/latest-image/device/${device_id}`);
   return data;
 }

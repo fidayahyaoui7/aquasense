@@ -24,6 +24,16 @@ const SEASON_LABELS: Record<string, string> = {
   automne: 'Automne',
 };
 
+const BUILDING_DISPLAY_NAMES: Record<string, string> = {
+  maison: 'Maison',
+  appartement: 'Appartement',
+  cafe: 'Café',
+  restaurant: 'Restaurant',
+  hotel: 'Hôtel',
+  immeuble: 'Immeuble',
+  usine: 'Usine',
+};
+
 function chartToRecharts(points: ChartPoint[]) {
   return points.map((p) => ({
     hour: `${String(p.hour).padStart(2, '0')}h`,
@@ -119,8 +129,8 @@ export function DashboardScreen() {
   const buildingTitle = config.buildingName || 'Mon bâtiment';
   const buildingSubtitle =
     current?.building_type
-      ? current.building_type.charAt(0).toUpperCase() + current.building_type.slice(1)
-      : config.buildingType || '—';
+      ? BUILDING_DISPLAY_NAMES[current.building_type] || current.building_type
+      : BUILDING_DISPLAY_NAMES[config.buildingType?.toLowerCase()] || config.buildingType || '—';
 
   return (
     <div className="min-h-screen bg-[#0D1B2A] max-w-[390px] mx-auto pb-20">

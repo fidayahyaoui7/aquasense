@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import unicodedata
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
@@ -16,6 +18,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def _normalize_email(value: str) -> str:
     """Même normalisation à l'inscription et au login (strip + minuscules)."""
     return (value or "").strip().lower()
+
+
+def _normalize_building_type(value: str) -> str:
+    normalized = unicodedata.normalize('NFKD', value or '')
+    return normalized.encode('ascii', 'ignore').decode('utf-8').strip().lower()
 
 
 class RegisterBody(BaseModel):
@@ -53,7 +60,7 @@ def register(body: RegisterBody, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Email invalide")
     if db.query(User).filter(User.email == email_norm).first():
         raise HTTPException(status_code=400, detail="Email déjà utilisé")
-    bt = (body.building_type or "maison").lower().strip()
+    bt = _normalize_building_type(body.building_type or "maison")
     if bt not in BUILDING_TYPES:
         bt = "maison"
     u = User(

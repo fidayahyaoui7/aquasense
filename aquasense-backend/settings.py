@@ -25,6 +25,10 @@ class AppConfig:
         "AQUASENSE_CORS_ORIGINS",
         "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:5175,http://127.0.0.1:5175,http://localhost:5176,http://127.0.0.1:5176"
     )
+    CORS_ORIGIN_REGEX: str = os.getenv(
+        "AQUASENSE_CORS_ORIGIN_REGEX",
+        r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$"
+    )
     DEFAULT_PRICE_PER_M3: float = float(os.getenv("AQUASENSE_PRICE_PER_M3", "1.85"))
     CURRENCY: str = os.getenv("AQUASENSE_CURRENCY", "DT")
 

@@ -54,6 +54,7 @@ export function getStoredUser(): AuthUser | null {
   }
 }
 
+
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }

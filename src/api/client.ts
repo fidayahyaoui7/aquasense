@@ -4,7 +4,7 @@ export const TOKEN_KEY = 'aquasense_token';
 export const USER_KEY = 'aquasense_user';
 
 export const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000',
+  baseURL: import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000',
   headers: {
     'Content-Type': 'application/json',
   },

@@ -4,6 +4,7 @@ Orchestration relevé : OCR → features → anomalie → persistance.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -16,6 +17,8 @@ from database import Alert, AppSetting, History, Reading, User
 from models.anomaly import AnomalyContext, SEASON_COEF, anomaly_detector, season_from_month
 from models.yolo_ocr import meter_ocr
 from settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _today_start_utc() -> datetime:
@@ -89,25 +92,28 @@ def process_image_upload(
     image_bytes: bytes,
     filename: str,
 ) -> dict[str, Any]:
+    logger.info(f"[UPLOAD] Starting upload for user_id={user_id}, image_size={len(image_bytes)} bytes")
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
+        logger.error(f"[UPLOAD] User {user_id} not found")
         raise ValueError("Utilisateur introuvable")
+    logger.info(f"[UPLOAD] User found: {user.email}")
 
-    ocr = meter_ocr.read_meter(image_bytes)
+    try:
+        ocr = meter_ocr.read_meter(image_bytes)
+        logger.info(f"[UPLOAD] OCR result: {ocr}")
+    except Exception as e:
+        logger.error(f"[UPLOAD] OCR failed: {e}")
+        raise
+
     raw = str(ocr.get("raw_reading") or "")
     consumption_m3 = float(ocr.get("consumption_m3") or 0.0)
+    backend = ocr.get("backend", "")
+    logger.info(f"[UPLOAD] Parsed: raw={raw}, consumption={consumption_m3}, backend={backend}")
 
-    rolling, prev = _rolling_and_prev(db, user_id)
+    # Save image first (always save, even if OCR is simulated)
     ts = datetime.utcnow()
-    ctx = AnomalyContext(
-        building_type=building_type or user.building_type,
-        consumption_m3=consumption_m3,
-        timestamp=ts,
-        rolling_avg_7d=rolling if rolling > 0 else consumption_m3,
-        prev_consumption=prev,
-    )
-    pred = anomaly_detector.predict(ctx)
-
     subdir = settings.UPLOAD_DIR / str(user_id)
     subdir.mkdir(parents=True, exist_ok=True)
     ext = Path(filename or "capture.jpg").suffix or ".jpg"
@@ -115,21 +121,81 @@ def process_image_upload(
         ext = ".jpg"
     rel = f"{user_id}/{uuid.uuid4().hex}{ext}"
     out_path = settings.UPLOAD_DIR / rel
-    out_path.write_bytes(image_bytes)
+    logger.info(f"[UPLOAD] Saving to: {out_path}")
+
+    try:
+        out_path.write_bytes(image_bytes)
+        logger.info(f"[UPLOAD] File saved successfully")
+    except Exception as e:
+        logger.error(f"[UPLOAD] File save failed: {e}")
+        raise
+
+    # Skip reading/alert if OCR is simulated (no actual detection)
+    # But create a dummy reading with consumption=0 so frontend can show image
+    if backend == "simulated":
+        logger.warning(f"[UPLOAD] OCR simulated, creating dummy reading with consumption=0")
+        reading = Reading(
+            user_id=user_id,
+            raw_reading="",
+            consumption_m3=0.0,
+            timestamp=ts,
+            image_path=rel,
+            anomaly_name="normal",
+            anomaly_confidence=0.0,
+        )
+        db.add(reading)
+        db.commit()
+        logger.info(f"[UPLOAD] Dummy reading saved with image_path={rel}")
+        return {
+            "raw_reading": raw,
+            "consumption_m3": consumption_m3,
+            "confidence": ocr.get("confidence", 0),
+            "backend": backend,
+            "note": ocr.get("note", ""),
+            "skipped": True,
+            "image_path": rel,
+        }
+
+    rolling, prev = _rolling_and_prev(db, user_id)
+    logger.info(f"[UPLOAD] History: rolling_avg={rolling}, prev={prev}")
+
+    ctx = AnomalyContext(
+        building_type=building_type or user.building_type,
+        consumption_m3=consumption_m3,
+        timestamp=ts,
+        rolling_avg_7d=rolling if rolling > 0 else consumption_m3,
+        prev_consumption=prev,
+    )
+    logger.info(f"[UPLOAD] AnomalyContext created")
+
+    try:
+        pred = anomaly_detector.predict(ctx)
+        logger.info(f"[UPLOAD] Anomaly prediction: {pred}")
+    except Exception as e:
+        logger.error(f"[UPLOAD] Anomaly detection failed: {e}")
+        raise
 
     reading = Reading(
         user_id=user_id,
         raw_reading=raw,
         consumption_m3=consumption_m3,
         timestamp=ts,
-        image_path=f"uploads/{rel}",
+        image_path=rel,
         anomaly_name=pred["anomaly_name"],
         anomaly_confidence=pred["confidence"],
     )
     db.add(reading)
-    db.flush()
+    logger.info(f"[UPLOAD] Reading added to session")
+
+    try:
+        db.flush()
+        logger.info(f"[UPLOAD] DB flush successful, reading.id={reading.id}")
+    except Exception as e:
+        logger.error(f"[UPLOAD] DB flush failed: {e}")
+        raise
 
     if pred["anomaly_name"] != "normal":
+        logger.info(f"[UPLOAD] Creating alert for anomaly: {pred['anomaly_name']}")
         alert = Alert(
             user_id=user_id,
             reading_id=reading.id,
@@ -143,9 +209,22 @@ def process_image_upload(
         )
         db.add(alert)
 
-    _upsert_history(db, user_id)
-    db.commit()
+    try:
+        _upsert_history(db, user_id)
+        logger.info(f"[UPLOAD] History upserted")
+    except Exception as e:
+        logger.error(f"[UPLOAD] History upsert failed: {e}")
+        raise
+
+    try:
+        db.commit()
+        logger.info(f"[UPLOAD] DB committed")
+    except Exception as e:
+        logger.error(f"[UPLOAD] DB commit failed: {e}")
+        raise
+
     db.refresh(reading)
+    logger.info(f"[UPLOAD] Complete!")
 
     return {
         "reading_id": reading.id,
