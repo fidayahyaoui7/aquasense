@@ -21,13 +21,17 @@ def main() -> None:
     for key, value in ocr_result.items():
         print(f"{key}: {value}")
 
+    # En production, le modèle d’anomalie reçoit l’incrément (delta) entre deux relevés, pas l’index compteur.
+    idx = float(ocr_result.get("meter_index_m3") or ocr_result.get("consumption_m3") or 0.0)
+    demo_delta = 0.02
     ctx = AnomalyContext(
         building_type="cafe",
-        consumption_m3=float(ocr_result.get("consumption_m3", 0.0) or 0.0),
+        consumption_m3=demo_delta,
         timestamp=datetime.utcnow(),
-        rolling_avg_7d=float(ocr_result.get("consumption_m3", 0.0) or 0.0),
+        rolling_avg_7d=demo_delta,
         prev_consumption=None,
     )
+    print(f"(index compteur OCR: {idx} m³ — test anomalie avec delta fictif {demo_delta} m³)")
 
     anomaly = anomaly_detector.predict(ctx)
     print("\n--- ANOMALY RESULT ---")

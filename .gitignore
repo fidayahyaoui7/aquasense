@@ -42,3 +42,11 @@ Thumbs.db
 
 # Logs
 *.log
+aquasense-backend/.venv311/
+aquasense-backend/venv/
+node_modules/
+*.db
+*.pt
+*.pkl
+__pycache__/
+*.pyc

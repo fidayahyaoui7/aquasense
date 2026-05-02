@@ -20,16 +20,31 @@ const ALLOWED_BUILDING = new Set([
   'usine',
 ]);
 
-// Default thresholds per building type (m³/h)
+// Default thresholds per building type (m³/h) — SONEDE 2023
 const DEFAULT_THRESHOLDS: Record<string, { normal: string; alert: string }> = {
-  'maison': { normal: '0.70', alert: '1.20' },
-  'appartement': { normal: '0.50', alert: '0.90' },
-  'cafe': { normal: '2.00', alert: '3.50' },
-  'restaurant': { normal: '4.00', alert: '7.00' },
-  'hotel': { normal: '8.00', alert: '14.00' },
-  'immeuble': { normal: '5.00', alert: '9.00' },
-  'usine': { normal: '15.00', alert: '28.00' },
+  'maison': { normal: '0.013', alert: '0.018' },
+  'appartement': { normal: '0.009', alert: '0.013' },
+  'cafe': { normal: '0.045', alert: '0.065' },
+  'restaurant': { normal: '0.090', alert: '0.130' },
+  'hotel': { normal: '0.250', alert: '0.375' },
+  'immeuble': { normal: '0.120', alert: '0.175' },
+  'usine': { normal: '0.400', alert: '0.600' },
 };
+
+// Old wrong thresholds to auto-correct from localStorage
+const OLD_WRONG_THRESHOLDS: Record<string, string> = {
+  '0.70': '0.013', '1.20': '0.018',
+  '0.50': '0.009', '0.90': '0.013',
+  '2.00': '0.045', '3.50': '0.065',
+  '4.00': '0.090', '7.00': '0.130',
+  '8.00': '0.250', '14.00': '0.375',
+  '5.00': '0.120', '9.00': '0.175',
+  '15.00': '0.400', '28.00': '0.600',
+};
+
+function correctOldThreshold(value: string): string {
+  return OLD_WRONG_THRESHOLDS[value.trim()] || value;
+}
 
 const BUILDING_DISPLAY_NAMES: Record<string, string> = {
   'maison': 'Maison',
@@ -46,6 +61,10 @@ function userToProfileState(u: auth.AuthUser, config: Record<string, string>) {
   const buildingTypeKey = u.building_type?.toLowerCase() || 'maison';
   const defaults = DEFAULT_THRESHOLDS[buildingTypeKey] || DEFAULT_THRESHOLDS['maison'];
   
+  // Auto-correct old wrong thresholds from localStorage
+  const normalFromConfig = correctOldThreshold(config.normalThreshold || '');
+  const alertFromConfig = correctOldThreshold(config.alertThreshold || '');
+  
   return {
     fullName: `${u.prenom} ${u.nom}`.trim(),
     email: u.email,
@@ -53,8 +72,8 @@ function userToProfileState(u: auth.AuthUser, config: Record<string, string>) {
     adresse: u.adresse || '',
     buildingName: config.buildingName || 'Mon Bâtiment',
     buildingType: buildingTypeKey,
-    normalThreshold: config.normalThreshold || defaults.normal,
-    alertThreshold: config.alertThreshold || defaults.alert,
+    normalThreshold: normalFromConfig || defaults.normal,
+    alertThreshold: alertFromConfig || defaults.alert,
   };
 }
 
@@ -80,8 +99,8 @@ export function ProfileScreen() {
     adresse: '',
     buildingName: 'Mon Bâtiment',
     buildingType: 'Maison',
-    normalThreshold: '0.70',
-    alertThreshold: '1.20',
+    normalThreshold: '0.013',
+    alertThreshold: '0.018',
   });
 
   const loadProfile = useCallback(async () => {

@@ -11,6 +11,10 @@ Features :
 - Heuristique : les compteurs ont toujours des zéros au début, jamais à la fin
   → pénalise les images mirrored/upside-down
 - Si modèles absents → relevé simulé (backend démarre quand même)
+
+Lecture compteur (affichage mécanique type 5 + n chiffres) :
+  les 5 premiers chiffres = m³ entiers ; le reste = fraction (litres en décimal m³).
+  Ex. ``00100533`` → 100 + 533/1000 = 100,533 m³ ; ``4152321`` → 41523 + 21/100 = 41523,21 m³.
 """
 
 from __future__ import annotations
@@ -217,22 +221,33 @@ class YoloMeterOCR:
         return best_pred
 
     def _simulated(self, reason: str) -> dict[str, Any]:
-        n = random.randint(4, 7)
-        sim = "".join(str(random.randint(0, 9)) for _ in range(n))
-        val = round(float(int(sim[:6] or "1")) / 10000.0, 4)
+        int_part = random.randint(0, 99_999)
+        frac = random.randint(0, 999)
+        sim = f"{int_part:05d}{frac:03d}"
+        idx = self._meter_index_from_digits(sim)
         return {
             "raw_reading": sim,
-            "consumption_m3": min(max(val, 0.001), 5.0),
+            "meter_index_m3": idx,
+            "consumption_m3": idx,
             "confidence": 0.35,
             "backend": "simulated",
             "note": reason,
         }
 
-    def _consumption_from_digits(self, raw: str) -> float:
-        """Convert digit string to consumption in m³."""
+    def _meter_index_from_digits(self, raw: str) -> float:
+        """Index cumulatif compteur en m³ : 5 chiffres m³ entiers + reste = décimal (litres)."""
         digits_only = re.sub(r"\D", "", raw) or "0"
-        v = float(int(digits_only[:8] or 0)) / 10000.0
-        return round(min(max(v, 0.0001), 50.0), 4)
+        if digits_only == "0":
+            return 0.0
+        int_str = digits_only[:5]
+        frac_str = digits_only[5:]
+        integer = int(int_str)
+        if frac_str:
+            fractional = int(frac_str) / (10 ** len(frac_str))
+        else:
+            fractional = 0.0
+        v = integer + fractional
+        return round(min(max(v, 0.0), 1_000_000.0), 6)
 
     def read_meter(self, image_bytes: bytes) -> dict[str, Any]:
         """Pipeline complet : Stage-1 crop → Stage-2 recognition."""
@@ -275,9 +290,12 @@ class YoloMeterOCR:
             if not raw:
                 return self._simulated("aucun chiffre détecté après traitement")
 
+            digits_clean = re.sub(r"\D", "", raw) or ""
+            idx = self._meter_index_from_digits(digits_clean)
             return {
-                "raw_reading": raw[:8],
-                "consumption_m3": self._consumption_from_digits(raw),
+                "raw_reading": digits_clean[:16],
+                "meter_index_m3": idx,
+                "consumption_m3": idx,
                 "confidence": 0.75,  # Confiance fixe pour pipeline YOLO complet
                 "backend": "yolov8_two_stage",
             }

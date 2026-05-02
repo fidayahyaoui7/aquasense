@@ -125,6 +125,18 @@ export function LocationScreen() {
           </div>
         )}
         
+        {/* Manual address input */}
+        <div className="space-y-2">
+          <label className="text-white text-sm">Adresse manuelle (optionnel)</label>
+          <input
+            type="text"
+            value={address}
+            onChange={(e) => { setAddress(e.target.value); setError(null); }}
+            placeholder="Entrez votre adresse..."
+            className="w-full bg-[#1A2B3C] border border-[#2A3B4C] text-white rounded-xl px-4 py-3 text-sm placeholder:text-[#90A4AE]"
+          />
+        </div>
+
         {!address && (
           <Button
             onClick={handleActivateLocation}

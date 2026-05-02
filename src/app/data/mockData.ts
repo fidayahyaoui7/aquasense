@@ -56,8 +56,8 @@ export const buildingTypes = [
 ] as const;
 
 export const seasons = {
-  summer: { name: 'Été', coefficient: 1.5 },
-  winter: { name: 'Hiver', coefficient: 0.8 },
-  spring: { name: 'Printemps', coefficient: 1.0 },
-  autumn: { name: 'Automne', coefficient: 1.2 },
+  summer: { name: 'Été', coefficient: 2.00 },
+  winter: { name: 'Hiver', coefficient: 0.60 },
+  spring: { name: 'Printemps', coefficient: 1.00 },
+  autumn: { name: 'Automne', coefficient: 0.85 },
 } as const;
