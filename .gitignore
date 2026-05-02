@@ -18,10 +18,13 @@ aquasense-backend/data/
 .Python
 
 # AI models (large files)
-ai_models/**/*.pt
-ai_models/**/*.pkl
-ai_models/**/*.onnx
-ai_models/**/*.h5
+ai_models/water_meter_models/det_train/weights/best.pt
+ai_models/water_meter_models/det_train/weights/last.pt
+ai_models/water_meter_models/seg_train/weights/best.pt
+ai_models/water_meter_models/seg_train/weights/last.pt
+*.pkl
+*.onnx
+*.h5
 
 # ESP32 build
 esp32_device/build/
