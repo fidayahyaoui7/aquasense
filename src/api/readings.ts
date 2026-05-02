@@ -2,6 +2,9 @@ import { api } from './client';
 
 export type CurrentReading = {
   consumption_m3: number;
+  /** Index cumulatif sur le compteur (m³), si enregistré */
+  meter_index_m3?: number | null;
+  raw_reading?: string | null;
   anomaly_name: string;
   status: string;
   timestamp: string | null;

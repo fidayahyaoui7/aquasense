@@ -18,6 +18,7 @@ from sqlalchemy import (
     String,
     Text,
     create_engine,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
@@ -97,7 +98,10 @@ class Reading(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
 
     raw_reading: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Volume consommé sur l'intervalle depuis le dernier relevé (m³) — utilisé graphes / alertes.
     consumption_m3: Mapped[float] = mapped_column(Float, nullable=False)
+    # Index cumulatif affiché sur le compteur (m³), pour calculer le delta au relevé suivant.
+    meter_index_m3: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
@@ -188,8 +192,18 @@ SessionLocal = sessionmaker(bind=_engine, autoflush=False, autocommit=False)
 # ============================================================
 # INIT DB
 # ============================================================
+def _ensure_readings_meter_index_column() -> None:
+    with _engine.connect() as conn:
+        rows = conn.execute(text("PRAGMA table_info(readings)")).fetchall()
+        cols = {r[1] for r in rows}
+        if "meter_index_m3" not in cols:
+            conn.execute(text("ALTER TABLE readings ADD COLUMN meter_index_m3 FLOAT"))
+            conn.commit()
+
+
 def init_db():
     Base.metadata.create_all(bind=_engine)
+    _ensure_readings_meter_index_column()
 
 
 # ============================================================

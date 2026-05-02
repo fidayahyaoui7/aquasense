@@ -26,6 +26,18 @@ def _today_start_utc() -> datetime:
     return now.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
+def _last_meter_index(db: Session, user_id: int) -> float | None:
+    r = (
+        db.query(Reading)
+        .filter(Reading.user_id == user_id, Reading.meter_index_m3.isnot(None))
+        .order_by(Reading.timestamp.desc())
+        .first()
+    )
+    if r is None:
+        return None
+    return float(r.meter_index_m3)
+
+
 def _rolling_and_prev(db: Session, user_id: int) -> tuple[float, float | None]:
     prev_rows = (
         db.query(Reading)
@@ -108,9 +120,14 @@ def process_image_upload(
         raise
 
     raw = str(ocr.get("raw_reading") or "")
-    consumption_m3 = float(ocr.get("consumption_m3") or 0.0)
+    meter_index_m3 = float(
+        ocr.get("meter_index_m3")
+        if ocr.get("meter_index_m3") is not None
+        else ocr.get("consumption_m3")
+        or 0.0
+    )
     backend = ocr.get("backend", "")
-    logger.info(f"[UPLOAD] Parsed: raw={raw}, consumption={consumption_m3}, backend={backend}")
+    logger.info(f"[UPLOAD] Parsed: raw={raw}, meter_index={meter_index_m3}, backend={backend}")
 
     # Save image first (always save, even if OCR is simulated)
     ts = datetime.utcnow()
@@ -148,7 +165,8 @@ def process_image_upload(
         logger.info(f"[UPLOAD] Dummy reading saved with image_path={rel}")
         return {
             "raw_reading": raw,
-            "consumption_m3": consumption_m3,
+            "meter_index_m3": meter_index_m3,
+            "consumption_m3": 0.0,
             "confidence": ocr.get("confidence", 0),
             "backend": backend,
             "note": ocr.get("note", ""),
@@ -156,14 +174,23 @@ def process_image_upload(
             "image_path": rel,
         }
 
+    prev_index = _last_meter_index(db, user_id)
+    if prev_index is not None:
+        consumption_delta_m3 = max(0.0, round(meter_index_m3 - prev_index, 6))
+    else:
+        consumption_delta_m3 = 0.0
+
     rolling, prev = _rolling_and_prev(db, user_id)
-    logger.info(f"[UPLOAD] History: rolling_avg={rolling}, prev={prev}")
+    logger.info(
+        f"[UPLOAD] History: rolling_avg={rolling}, prev_delta={prev}, "
+        f"meter_index={meter_index_m3}, delta={consumption_delta_m3}"
+    )
 
     ctx = AnomalyContext(
         building_type=building_type or user.building_type,
-        consumption_m3=consumption_m3,
+        consumption_m3=consumption_delta_m3,
         timestamp=ts,
-        rolling_avg_7d=rolling if rolling > 0 else consumption_m3,
+        rolling_avg_7d=rolling if rolling > 0 else consumption_delta_m3,
         prev_consumption=prev,
     )
     logger.info(f"[UPLOAD] AnomalyContext created")
@@ -178,7 +205,8 @@ def process_image_upload(
     reading = Reading(
         user_id=user_id,
         raw_reading=raw,
-        consumption_m3=consumption_m3,
+        consumption_m3=consumption_delta_m3,
+        meter_index_m3=meter_index_m3,
         timestamp=ts,
         image_path=rel,
         anomaly_name=pred["anomaly_name"],
@@ -205,7 +233,7 @@ def process_image_upload(
             message=str(pred.get("message") or ""),
             resolved=False,
             created_at=ts,
-            consumption_m3=consumption_m3,
+            consumption_m3=consumption_delta_m3,
         )
         db.add(alert)
 
@@ -229,7 +257,8 @@ def process_image_upload(
     return {
         "reading_id": reading.id,
         "raw_reading": raw,
-        "consumption_m3": consumption_m3,
+        "meter_index_m3": meter_index_m3,
+        "consumption_m3": consumption_delta_m3,
         "ocr_confidence": ocr.get("confidence"),
         "ocr_backend": ocr.get("backend"),
         "anomaly": pred,
@@ -250,6 +279,8 @@ def current_reading_payload(db: Session, user_id: int) -> dict[str, Any]:
     if not r:
         return {
             "consumption_m3": 0.0,
+            "meter_index_m3": None,
+            "raw_reading": None,
             "anomaly_name": "normal",
             "status": "Aucun relevé",
             "timestamp": None,
@@ -261,6 +292,8 @@ def current_reading_payload(db: Session, user_id: int) -> dict[str, Any]:
     status = "normal" if (r.anomaly_name or "normal") == "normal" else "alert"
     return {
         "consumption_m3": float(r.consumption_m3),
+        "meter_index_m3": float(r.meter_index_m3) if r.meter_index_m3 is not None else None,
+        "raw_reading": r.raw_reading,
         "anomaly_name": r.anomaly_name or "normal",
         "status": status,
         "timestamp": r.timestamp.isoformat() + "Z",
