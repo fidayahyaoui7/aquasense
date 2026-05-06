@@ -37,6 +37,11 @@ export type ReadingStats = {
 export type LatestImage = {
   image_url: string | null;
   timestamp: string | null;
+  raw_reading?: string | null;
+  meter_index_m3?: number | null;
+  ocr_backend?: string | null;
+  ocr_confidence?: number | null;
+  ocr_note?: string | null;
 };
 
 export async function getCurrent(user_id: number): Promise<CurrentReading> {

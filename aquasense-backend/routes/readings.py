@@ -77,7 +77,7 @@ async def upload_from_esp32(
 
 
 # ============================================================
-# LATEST IMAGE (CLEAN VERSION)
+# LATEST IMAGE (CLEAN VERSION) — with live OCR
 # ============================================================
 @router.get("/latest-image")
 def latest_image(
@@ -104,9 +104,18 @@ def latest_image(
 
         if files:
             latest = files[0]
+            # Run OCR on the actual latest image file
+            from models.yolo_ocr import meter_ocr
+            image_bytes = latest.read_bytes()
+            ocr = meter_ocr.read_meter(image_bytes)
             return {
                 "image_url": f"{base_url}/uploads/{user_id}/{latest.name}",
                 "timestamp": datetime.fromtimestamp(latest.stat().st_mtime).isoformat() + "Z",
+                "raw_reading": ocr.get("raw_reading"),
+                "meter_index_m3": ocr.get("meter_index_m3"),
+                "ocr_backend": ocr.get("backend"),
+                "ocr_confidence": ocr.get("confidence"),
+                "ocr_note": ocr.get("note"),
             }
 
     # 2. fallback DB

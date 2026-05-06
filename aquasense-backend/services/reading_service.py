@@ -153,8 +153,9 @@ def process_image_upload(
         logger.warning(f"[UPLOAD] OCR simulated, creating dummy reading with consumption=0")
         reading = Reading(
             user_id=user_id,
-            raw_reading="",
+            raw_reading=raw,
             consumption_m3=0.0,
+            meter_index_m3=meter_index_m3,
             timestamp=ts,
             image_path=rel,
             anomaly_name="normal",
@@ -165,6 +166,7 @@ def process_image_upload(
         logger.info(f"[UPLOAD] Dummy reading saved with image_path={rel}")
         return {
             "raw_reading": raw,
+            "meter_index_m3": meter_index_m3,
             "meter_index_m3": meter_index_m3,
             "consumption_m3": 0.0,
             "confidence": ocr.get("confidence", 0),
@@ -267,6 +269,8 @@ def process_image_upload(
 
 
 def current_reading_payload(db: Session, user_id: int) -> dict[str, Any]:
+    from settings import settings as app_settings
+    from models.yolo_ocr import meter_ocr
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise ValueError("Utilisateur introuvable")
@@ -276,6 +280,108 @@ def current_reading_payload(db: Session, user_id: int) -> dict[str, Any]:
         .order_by(Reading.timestamp.desc())
         .first()
     )
+    # Check for newer image in filesystem
+    user_dir = app_settings.UPLOAD_DIR / str(user_id)
+    latest_file = None
+    latest_mtime = 0.0
+    if user_dir.exists():
+        files = sorted(
+            [f for f in user_dir.iterdir() if f.is_file()],
+            key=lambda x: x.stat().st_mtime,
+            reverse=True,
+        )
+        if files:
+            latest_file = files[0]
+            latest_mtime = latest_file.stat().st_mtime
+    # Always use latest image from filesystem for live OCR
+    if latest_file:
+        image_bytes = latest_file.read_bytes()
+        ocr = meter_ocr.read_meter(image_bytes)
+        idx = ocr.get("meter_index_m3")
+        raw = ocr.get("raw_reading")
+        season = season_from_month(datetime.utcnow().month)
+        
+        # Compute delta if we have a previous reading
+        consumption = 0.0
+        if r and r.meter_index_m3 is not None and idx is not None:
+            consumption = max(0.0, float(idx) - float(r.meter_index_m3))
+        
+        # Check if this exact image file was already processed by ANY reading
+        image_ts = datetime.fromtimestamp(latest_mtime)
+        rel_path = f"{user_id}/{latest_file.name}"
+        existing_reading = db.query(Reading).filter(Reading.user_id == user_id, Reading.image_path == rel_path).first()
+        
+        if existing_reading:
+            # File already processed — return the existing reading data
+            season = season_from_month(existing_reading.timestamp.month)
+            status = "alert" if (existing_reading.anomaly_name and existing_reading.anomaly_name != "normal") else "normal"
+            return {
+                "consumption_m3": float(existing_reading.consumption_m3),
+                "meter_index_m3": float(existing_reading.meter_index_m3) if existing_reading.meter_index_m3 is not None else None,
+                "raw_reading": existing_reading.raw_reading,
+                "anomaly_name": existing_reading.anomaly_name or "normal",
+                "status": status,
+                "timestamp": existing_reading.timestamp.isoformat() + "Z",
+                "building_type": user.building_type,
+                "season": season,
+                "season_coefficient": SEASON_COEF[season],
+                "ocr_backend": ocr.get("backend"),
+                "ocr_note": ocr.get("note"),
+            }
+        
+        # New file — process it, run anomaly detection and save to DB
+        from models.anomaly import anomaly_detector
+        ctx = AnomalyContext(
+            building_type=user.building_type,
+            consumption_m3=consumption,
+            timestamp=image_ts,
+            rolling_avg_7d=consumption,
+            prev_consumption=consumption,
+        )
+        pred = anomaly_detector.predict(ctx)
+        
+        new_reading = Reading(
+            user_id=user_id,
+            raw_reading=raw or "",
+            consumption_m3=consumption,
+            meter_index_m3=float(idx) if idx else None,
+            timestamp=image_ts,
+            image_path=rel_path,
+            anomaly_name=pred["anomaly_name"],
+            anomaly_confidence=pred["confidence"],
+        )
+        db.add(new_reading)
+        db.commit()
+        
+        # Create alert if anomaly detected
+        if pred["anomaly_name"] != "normal":
+            alert = Alert(
+                user_id=user_id,
+                reading_id=new_reading.id,
+                anomaly_type=int(pred["anomaly_type"]),
+                anomaly_name=pred["anomaly_name"],
+                confidence=float(pred["confidence"]),
+                message=str(pred.get("message") or ""),
+                resolved=False,
+                created_at=image_ts,
+                consumption_m3=consumption,
+            )
+            db.add(alert)
+            db.commit()
+        
+        return {
+            "consumption_m3": consumption,
+            "meter_index_m3": float(idx) if idx is not None else None,
+            "raw_reading": raw,
+            "anomaly_name": pred["anomaly_name"],
+            "status": "alert" if pred["anomaly_name"] != "normal" else "normal",
+            "timestamp": image_ts.isoformat() + "Z",
+            "building_type": user.building_type,
+            "season": season,
+            "season_coefficient": SEASON_COEF[season],
+            "ocr_backend": ocr.get("backend"),
+            "ocr_note": ocr.get("note"),
+        }
     if not r:
         return {
             "consumption_m3": 0.0,

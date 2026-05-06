@@ -2,13 +2,10 @@
 #include <WiFi.h>
 #include "ping/ping_sock.h"
 
-// ================= WIFI =================
-const char* ssid     = "ALHN-C12F";
-const char* password = "T62T4EmmDg";
-
-// ================= BACKEND =================
-const char* SERVER_HOST = "192.168.1.68";
-const int   SERVER_PORT = 8000;
+// ================= WIFI (EDIT THESE) =================
+// Copy config_wifi.example.h to config_wifi.h and fill in your credentials
+// DO NOT commit config_wifi.h to git!
+#include "config_wifi.h"
 
 // ================= DEVICE ID (IMPORTANT) =================
 const char* DEVICE_ID = "ESP32-AQUASENSE-01";  

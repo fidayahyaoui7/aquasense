@@ -71,7 +71,7 @@ export function DashboardScreen() {
       return;
     }
     let cancelled = false;
-    (async () => {
+    const loadData = async () => {
       try {
         const [c, s, ch] = await Promise.all([
           readings.getCurrent(user.id),
@@ -87,9 +87,13 @@ export function DashboardScreen() {
       } catch {
         if (!cancelled) setLoadError('Impossible de charger les données.');
       }
-    })();
+    };
+    loadData();
+    // Auto-refresh every 10 seconds for real-time updates
+    const interval = setInterval(loadData, 10000);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, [user?.id, user?.is_configured, user?.building_type, user?.adresse, navigate]);
 
@@ -189,15 +193,33 @@ export function DashboardScreen() {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-5xl font-bold text-white">
-              {current != null ? current.consumption_m3.toFixed(2) : '—'}
+              {current != null ? current.consumption_m3.toFixed(3) : '—'}
             </span>
             <span className="text-xl text-white/80">m³</span>
           </div>
+          {/* Show meter index when available */}
+          {current?.meter_index_m3 != null && (
+            <div className="mt-2 pt-2 border-t border-white/20">
+              <span className="text-white/60 text-xs">Index compteur : </span>
+              <span className="text-white/90 text-sm font-medium">
+                {current.meter_index_m3.toFixed(3)} m³
+              </span>
+              {current?.raw_reading && (
+                <span className="text-white/50 text-xs ml-2">({current.raw_reading})</span>
+              )}
+            </div>
+          )}
           <p className="text-white/70 text-xs mt-2">Dernière mise à jour : {lastUpdate}</p>
           {!isEmptyState && current?.anomaly_name && current.anomaly_name !== 'normal' && (
-            <p className="text-white/90 text-xs mt-1 font-medium">
-              Anomalie : {current.anomaly_name.replace(/_/g, ' ')}
-            </p>
+            <div className="mt-2 bg-[#E63946]/20 border border-[#E63946]/50 rounded-lg px-3 py-2 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-[#E63946]" />
+              <span className="text-[#E63946] text-xs font-bold uppercase tracking-wide">
+                ALERTE
+              </span>
+              <span className="text-white text-xs font-medium">
+                {current.anomaly_name.replace(/_/g, ' ')}
+              </span>
+            </div>
           )}
           {isEmptyState && (
             <p className="text-white/80 text-xs mt-1">Envoie une première photo de compteur pour commencer.</p>

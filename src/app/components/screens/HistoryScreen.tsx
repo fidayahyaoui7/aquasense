@@ -149,7 +149,7 @@ export function HistoryScreen() {
         const d = parseISO(r.timestamp.replace('Z', ''));
         return {
           time: format(d, 'HH:mm', { locale: fr }),
-          consumption: r.consumption_m3.toFixed(2),
+          consumption: r.consumption_m3.toFixed(3),
           status: r.anomaly_name !== 'normal' ? 'alert' : 'normal',
         };
       });

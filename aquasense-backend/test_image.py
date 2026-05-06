@@ -10,7 +10,7 @@ from models.yolo_ocr import meter_ocr
 
 
 def main() -> None:
-    path = Path(__file__).parent / "uploads" / "4" / "65dc7d660e884cc2aad8621477a4c6f4.jpg"
+    path = Path(__file__).parent / "uploads" / "4" / "c3b2a151449d46eb9dbc5a1300775b15.jpg"
     if not path.is_file():
         raise SystemExit(f"Fichier introuvable : {path}")
 

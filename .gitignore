@@ -26,8 +26,9 @@ ai_models/water_meter_models/seg_train/weights/last.pt
 *.onnx
 *.h5
 
-# ESP32 build
+# ESP32 build & config
 esp32_device/build/
+esp32_device/config_wifi.h
 
 # IDE
 .vscode/
