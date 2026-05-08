@@ -1,6 +1,13 @@
 
 # AquaSense — Surveillance Intelligente de l'Eau
 
+# AquaSense — Surveillance Intelligente de l'Eau
+
+![Python](https://img.shields.io/badge/Python-3.11-blue)
+![React](https://img.shields.io/badge/React-18-61DAFB)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.100-009688)
+![License](https://img.shields.io/badge/Licence-Prototype-orange)
+
 Application mobile de surveillance intelligente des compteurs d'eau avec détection d'anomalies par IA.
 
 ## 🏠 Description
