@@ -48,7 +48,7 @@ py -3.11 -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 L'API sera disponible sur : `http://127.0.0.1:8000`
 - Documentation Swagger : `http://127.0.0.1:8000/docs`
 
-## 🤖 Modèles IA (Optionnel)
+## 🤖 Modèles IA 
 
 ### Vue d'ensemble du pipeline complet
 
