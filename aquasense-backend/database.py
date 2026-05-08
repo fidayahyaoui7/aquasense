@@ -245,7 +245,6 @@ def seed_database():
         d1 = Device(
             device_id="ESP32-AQUASENSE-01",
             user_id=u1.id,
-            name="Salon ESP32",
         )
 
         db.add(d1)
