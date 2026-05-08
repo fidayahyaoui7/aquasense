@@ -208,7 +208,7 @@ export function AlertsScreen() {
                       className="text-xs px-2 py-1 rounded-full flex-shrink-0"
                       style={{ backgroundColor: config.color + '33', color: config.color }}
                     >
-                      {alert.value.toFixed(2)} m³
+                      {alert.value.toFixed(3)} m³
                     </span>
                   </div>
                   <p className="text-[#90A4AE] text-xs mb-2">
@@ -268,7 +268,7 @@ export function AlertsScreen() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-[#90A4AE] text-xs mb-1">Valeur détectée</p>
-                    <p className="text-white text-2xl font-bold">{selectedAlert.value.toFixed(2)} m³</p>
+                    <p className="text-white text-2xl font-bold">{selectedAlert.value.toFixed(3)} m³</p>
                   </div>
                   <div>
                     <p className="text-[#90A4AE] text-xs mb-1">Confiance</p>

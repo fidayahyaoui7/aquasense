@@ -1,0 +1,72 @@
+{
+  "model_name": "XGBoost",
+  "features": [
+    "building_type_enc",
+    "season_enc",
+    "hour",
+    "day_of_week",
+    "is_night",
+    "threshold_m3h",
+    "alert_threshold_m3h",
+    "consumption_m3h",
+    "consumption_ratio",
+    "rolling_avg_7d",
+    "delta_vs_prev",
+    "ratio_vs_history",
+    "over_alert",
+    "near_zero",
+    "night_spike"
+  ],
+  "label_names": {
+    "0": "normal",
+    "1": "surconsommation",
+    "2": "fuite_nocturne",
+    "3": "anomalie_saisonniere",
+    "4": "conso_nulle",
+    "5": "pic_inhabituel"
+  },
+  "thresholds": {
+    "maison": 0.013,
+    "appartement": 0.009,
+    "cafe": 0.045,
+    "restaurant": 0.09,
+    "hotel": 0.25,
+    "immeuble": 0.12,
+    "usine": 0.4
+  },
+  "alert_thresholds": {
+    "maison": 0.018,
+    "appartement": 0.013,
+    "cafe": 0.065,
+    "restaurant": 0.13,
+    "hotel": 0.375,
+    "immeuble": 0.175,
+    "usine": 0.6
+  },
+  "season_coefs": {
+    "hiver": 0.6,
+    "printemps": 1.0,
+    "ete": 2.0,
+    "automne": 0.85
+  },
+  "night_ratios": {
+    "maison": 0.015,
+    "appartement": 0.012,
+    "cafe": 0.0,
+    "restaurant": 0.0,
+    "hotel": 0.12,
+    "immeuble": 0.018,
+    "usine": 0.005
+  },
+  "leak_min_m3h": 0.002,
+  "leak_max_m3h": 0.012,
+  "sonede_notes": {
+    "unit": "m3_per_hour",
+    "maison_ref_m3h": 0.013,
+    "alert_m3_quarter": 40,
+    "summer_factor": 2.0,
+    "source": "SONEDE Rapport Annuel 2023"
+  },
+  "accuracy": 0.9038,
+  "f1_weighted": 0.904
+}

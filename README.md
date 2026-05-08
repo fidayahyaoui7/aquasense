@@ -109,6 +109,40 @@ Il classe chaque relevé en **6 catégories** : `normal`, `surconsommation`, `fu
 
 ### Fichiers requis
 
+### Vue d'ensemble du pipeline complet
+
+![Pipeline de traitement complet](assets/pipeline_overview.png)
+
+Le pipeline se divise en deux branches :
+- **OCR** (< 100 ms) : lecture des m³ depuis la caméra
+- **XGBoost** (< 10 ms) : classification de l'anomalie en 6 classes
+
+---
+
+### Module OCR — 2 étapes
+
+La lecture des chiffres se fait en deux passes YOLOv8 successives :
+
+![Pipeline OCR](assets/ocr_pipeline.png)
+
+| Étape | Modèle | Rôle |
+|-------|--------|------|
+| Stage 1 | `best.pt` (YOLOv8n-seg) | Segmentation — isole la fenêtre de chiffres |
+| Stage 2 | `best.pt` (YOLOv8n-det) | Détection 0–9 — lit chaque chiffre |
+
+---
+
+### Détection d'anomalies — XGBoost
+
+![Comparaison des modèles](assets/model_accuracy.png)
+
+XGBoost atteint **90,4 % d'accuracy** et un **F1-score de 0,904**, le meilleur des trois modèles testés.
+Il classe chaque relevé en **6 catégories** : `normal`, `surconsommation`, `fuite_nocturne`, `anomalie_saisonniere`, `pic_inhabituel`, `conso_nulle`.
+
+---
+
+### Fichiers requis
+
 Pour activer la détection d'anomalies par IA, placer les fichiers suivants dans `aquasense-backend/ai_models/` :
 
 | Fichier | Description |

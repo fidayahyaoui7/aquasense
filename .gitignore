@@ -22,12 +22,16 @@ ai_models/water_meter_models/det_train/weights/best.pt
 ai_models/water_meter_models/det_train/weights/last.pt
 ai_models/water_meter_models/seg_train/weights/best.pt
 ai_models/water_meter_models/seg_train/weights/last.pt
-*.pkl
 *.onnx
 *.h5
 
-# ESP32 build
+# Allow anomaly model artifacts (small PKL files)
+!ai_models/*.pkl
+!ai_models/*.json
+
+# ESP32 build & config
 esp32_device/build/
+esp32_device/config_wifi.h
 
 # IDE
 .vscode/
@@ -47,6 +51,5 @@ aquasense-backend/venv/
 node_modules/
 *.db
 *.pt
-*.pkl
 __pycache__/
 *.pyc
