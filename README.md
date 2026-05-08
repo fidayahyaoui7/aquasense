@@ -33,6 +33,16 @@ AquaSense est une application IoT + IA qui permet de :
 - **Node.js** : 18+
 - **npm** : 9+
 
+## 📷 Matériel Requis
+
+| Composant | Rôle |
+|-----------|------|
+| ESP32-CAM | Capture l'image du compteur et l'envoie au backend |
+| Compteur d'eau | Source de données à surveiller |
+| Alimentation 5V | Alimente l'ESP32-CAM |
+
+> L'ESP32-CAM envoie les images JPG au backend via Wi-Fi — aucun câblage supplémentaire requis.
+
 ## 🚀 Installation
 
 ### Frontend (React + Vite)
@@ -184,6 +194,21 @@ AquaSense Mobile App Prototype/
 | Immeuble | 0.120 | 0.175|
 | Usine | 0.4 | 0.6 |
 
+## 🔌 API Endpoints
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| POST | `/auth/login` | Connexion utilisateur |
+| POST | `/auth/register` | Inscription |
+| GET | `/users/{id}` | Profil utilisateur |
+| GET | `/readings/` | Historique des relevés |
+| POST | `/readings/` | Ajouter un relevé |
+| GET | `/alerts/` | Liste des alertes |
+| PUT | `/alerts/{id}` | Marquer alerte comme lue |
+| GET | `/settings/` | Paramètres utilisateur |
+
+> Documentation complète interactive : [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+
 ## 🔧 Commandes Utiles
 
 ```bash
@@ -198,6 +223,23 @@ py -3.11 -m uvicorn main:app --reload --port 8000
 # Réinitialiser la base de données
 Remove-Item -Path "aquasense-backend/data/aquasense.db" -Force
 ```
+
+## ⚠️ Limitations Connues
+
+- Fonctionne uniquement avec compteurs à **affichage numérique**
+- Nécessite une **bonne luminosité** pour que l'OCR soit précis
+- Base de données **SQLite** — non recommandée en production
+- Un seul compteur par utilisateur pour le moment
+- Les modèles IA (`best.pt`, `best_model.pkl`) ne sont **pas inclus** dans le repo
+
+  ## 🗺️ Roadmap
+
+- [ ] Support multi-compteurs par utilisateur
+- [ ] Export PDF des rapports de consommation
+- [ ] Application mobile native (React Native)
+- [ ] Remplacement SQLite → PostgreSQL pour la production
+- [ ] Tableau de bord administrateur
+- [ ] Support de plusieurs langues (FR / AR / EN)
 
 ## 📝 Licence
 
