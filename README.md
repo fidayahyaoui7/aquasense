@@ -19,6 +19,14 @@ AquaSense est une application IoT + IA qui permet de :
 - Analyser l'historique de consommation
 - Configurer des seuils personnalisés par type de bâtiment
 
+  
+## 📱 Aperçu de l'Application
+
+| Login | Dashboard | Alertes | Profil |
+|-------|-----------|---------|--------|
+| ![](assets/screen_login.png) | ![](assets/screen_dashboard.png) | ![](assets/screen_alerts.png) | ![](assets/screen_profile.png) |
+
+
 ## 📋 Prérequis
 
 - **Python** : 3.11+
