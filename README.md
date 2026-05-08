@@ -225,13 +225,6 @@ py -3.11 -m uvicorn main:app --reload --port 8000
 Remove-Item -Path "aquasense-backend/data/aquasense.db" -Force
 ```
 
-## ⚠️ Limitations Connues
-
-- Fonctionne uniquement avec compteurs à **affichage numérique**
-- Nécessite une **bonne luminosité** pour que l'OCR soit précis
-- Base de données **SQLite** — non recommandée en production
-- Un seul compteur par utilisateur pour le moment
-- Les modèles IA (`best.pt`, `best_model.pkl`) ne sont **pas inclus** dans le repo
 
   ## 🗺️ Roadmap
 
