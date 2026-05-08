@@ -24,7 +24,7 @@ AquaSense est une application IoT + IA qui permet de :
 
 | Login | Dashboard | Alertes | Profil |
 |-------|-----------|---------|--------|
-| ![](assets/screen_login.jpeg) | ![](assets/screen_dashboard.jpeg) | ![](assets/screen_alerts.jpeg) | ![](assets/screen_profile.jpeg) |
+| ![](assets/screen_login.png) | ![](assets/screen_dashboard.png) | ![](assets/screen_alerts.png) | ![](assets/screen_profile.png) |
 
 
 ## 📋 Prérequis
