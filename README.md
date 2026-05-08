@@ -207,7 +207,8 @@ AquaSense Mobile App Prototype/
 | PUT | `/alerts/{id}` | Marquer alerte comme lue |
 | GET | `/settings/` | Paramètres utilisateur |
 
-> Documentation complète interactive : [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+> > 💡 Documentation Swagger interactive disponible sur `http://127.0.0.1:8000/docs` 
+> après avoir lancé le backend localement.
 
 ## 🔧 Commandes Utiles
 
